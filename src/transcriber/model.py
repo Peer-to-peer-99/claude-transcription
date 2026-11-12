@@ -25,10 +25,10 @@ class TranscriptionModel:
 
     def transcribe(self, file_path: str):
 
-        segments, info = self.model.transcribe(
+        return self.model.transcribe(
             file_path,
             beam_size=5,
             vad_filter=True,
+            condition_on_previous_text=False,
+            language="pt",
         )
-
-        return segments, info
