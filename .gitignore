@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Virtual environment
+.venv/
+venv/
+
+# IDE
+.idea/
+.vscode/
+
+# Environment
+.env
+.env.*
+
+# Transcriptions and media
+transcriptions/*
+!transcriptions/.gitkeep
+
+*.mp3
+*.mp4
+*.wav
+*.m4a
+*.mkv
+
+# Cache
+.cache/
+models/
