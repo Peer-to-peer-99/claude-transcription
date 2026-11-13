@@ -46,7 +46,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEYyQTM4OTk5NTFBNkY4NjYKUldSbStLWlJtWW1qOG1TNWJVbXpmd245bi9Ic1preWJqN204RVNHY1lnejlyalpIL1E5NEtwejAK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEM5RjczM0RDRUEyNDdCMDIKUldRQ2V5VHEzRFAzeVJ3TzVzVHdYdmtPQmx2TXZVVVVRdDlzL2RkeDN6dzQ2V0NMbUJySUxPNWoK",
       "endpoints": [
         "https://github.com/Peer-to-peer-99/claude-transcription/releases/latest/download/latest.json"
       ],
