@@ -1,0 +1,83 @@
+name: Build Claude Audiencia - Windows
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+          python -m pip install pyinstaller==6.22.3 pytest
+
+      - name: Run Python tests
+        run: python -m pytest
+
+      - name: Build transcription executable
+        run: pyinstaller --clean --noconfirm audiencia.spec
+
+      - name: Prepare Tauri resources
+        shell: pwsh
+        run: |
+          $Source = "dist/audiencia"
+          $Destination = "desktop/src-tauri/resources/audiencia"
+
+          if (!(Test-Path "$Source/audiencia.exe")) {
+            throw "audiencia.exe não foi gerado."
+          }
+
+          if (Test-Path $Destination) {
+            Remove-Item $Destination -Recurse -Force
+          }
+
+          New-Item -ItemType Directory -Path $Destination -Force
+          Copy-Item "$Source/*" $Destination -Recurse -Force
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: desktop
+        run: npm ci
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build and publish Tauri release
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: desktop
+          tagName: app-v__VERSION__
+          releaseName: Claude Audiencia v__VERSION__
+          releaseBody: |
+            Nova versão do Claude Audiência para Windows.
+            
+            Baixe o instalador NSIS para instalar ou atualizar o aplicativo.
+          releaseDraft: true
+          prerelease: false
+          args: --bundles nsis
+
