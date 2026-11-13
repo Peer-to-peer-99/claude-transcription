@@ -1,0 +1,58 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Claude Audiencia",
+  "version": "1.0.0",
+  "identifier": "com.claudecode.audiencia",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Claude Audiência",
+        "width": 1100,
+        "height": 750,
+        "minWidth": 900,
+        "minHeight": 650,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": null
+    },
+    "enableGTKAppId": true
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "createUpdaterArtifacts": true,
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "resources": {
+      "resources/audiencia/": "audiencia/"
+    },
+    "category": "Productivity",
+    "shortDescription": "Transcrição e análise de audiências",
+    "longDescription": "Aplicativo para transcrição local de áudio e vídeo e análise de audiências com Claude."
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEYyQTM4OTk5NTFBNkY4NjYKUldSbStLWlJtWW1qOG1TNWJVbXpmd245bi9Ic1preWJqN204RVNHY1lnejlyalpIL1E5NEtwejAK",
+      "endpoints": [
+        "https://github.com/Peer-to-peer-99/claude-transcription/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  }
+}
