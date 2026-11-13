@@ -192,8 +192,6 @@ class TranscriptionService:
 
         except Exception as error:
 
-            output_path.unlink(missing_ok=True)
-
             self._emit(
                 on_event,
                 {
