@@ -238,7 +238,6 @@ function handleTranscriptionEvent(event: TranscriptionEvent) {
       break;
   }
 }
-
 // Inicia a transcrição.
 async function startTranscription() {
   if (!selectedFile.value || isTranscribing.value) return;
@@ -261,8 +260,15 @@ async function startTranscription() {
       filePath: selectedFile.value.path,
     });
   } catch (error) {
-    errorMessage.value = String(error);
+    // Preserva a mensagem detalhada enviada pelo Python.
+    // Só utiliza o erro do Rust se nenhuma mensagem já existir.
+    if (!errorMessage.value) {
+      errorMessage.value = String(error);
+    }
+
     statusText.value = "Erro na transcrição";
+
+    console.error("Erro ao iniciar transcrição:", error);
   } finally {
     isTranscribing.value = false;
 

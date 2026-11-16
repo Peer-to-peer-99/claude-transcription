@@ -8,11 +8,14 @@ use std::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::{
-    path::BaseDirectory,
     AppHandle,
     Emitter,
     Manager,
 };
+
+#[cfg(not(debug_assertions))]
+use tauri::path::BaseDirectory;
+
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct FileInfo {
@@ -52,49 +55,56 @@ async fn start_transcription(
     .await
     .map_err(|error| error.to_string())?
 }
+
 fn execute_transcription(
     app: AppHandle,
     file_path: String,
 ) -> Result<(), String> {
 
+    // Disponível somente durante o desenvolvimento.
+    #[cfg(debug_assertions)]
     let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
         .canonicalize()
+        .map_err(|error| {
+            format!("Não foi possível localizar a raiz do projeto: {error}")
+        })?;
+
+    // Desenvolvimento Windows.
+    #[cfg(all(target_os = "windows", debug_assertions))]
+    let python = project_root
+        .join(".venv")
+        .join("Scripts")
+        .join("python.exe");
+
+    // Produção Windows.
+    #[cfg(all(target_os = "windows", not(debug_assertions)))]
+    let python = app
+        .path()
+        .resolve(
+            "audiencia/audiencia.exe",
+            BaseDirectory::Resource,
+        )
         .map_err(|error| error.to_string())?;
 
-    // Desenvolvimento: utiliza a .venv.
-    // Produção: utiliza o executável incluído no instalador.
+    // Desenvolvimento Linux/macOS.
+    #[cfg(all(not(target_os = "windows"), debug_assertions))]
+    let python = project_root
+        .join(".venv")
+        .join("bin")
+        .join("python");
 
-    #[cfg(target_os = "windows")]
-    let python = if cfg!(debug_assertions) {
-        project_root
-            .join(".venv")
-            .join("Scripts")
-            .join("python.exe")
-    } else {
-        app.path()
-            .resolve(
-                "audiencia/audiencia.exe",
-                BaseDirectory::Resource,
-            )
-            .map_err(|error| error.to_string())?
-    };
+    // Produção Linux/macOS.
+    #[cfg(all(not(target_os = "windows"), not(debug_assertions)))]
+    let python = app
+        .path()
+        .resolve(
+            "audiencia/audiencia",
+            BaseDirectory::Resource,
+        )
+        .map_err(|error| error.to_string())?;
 
-    #[cfg(not(target_os = "windows"))]
-    let python = if cfg!(debug_assertions) {
-        project_root
-            .join(".venv")
-            .join("bin")
-            .join("python")
-    } else {
-        app.path()
-            .resolve(
-                "audiencia/audiencia",
-                BaseDirectory::Resource,
-            )
-            .map_err(|error| error.to_string())?
-    };
-
+    // Verifica se o executável existe.
     if !python.exists() {
         return Err(format!(
             "Executável de transcrição não encontrado: {}",
@@ -103,7 +113,8 @@ fn execute_transcription(
     }
 
     // Diretório persistente de dados do aplicativo.
-    let app_data_dir = app.path()
+    let app_data_dir = app
+        .path()
         .app_data_dir()
         .map_err(|error| error.to_string())?;
 
@@ -119,7 +130,9 @@ fn execute_transcription(
     // Prepara a execução.
     let mut command = Command::new(&python);
 
-    if cfg!(debug_assertions) {
+    // Argumentos utilizados somente no desenvolvimento.
+    #[cfg(debug_assertions)]
+    {
         command
             .arg("-u")
             .arg("-m")
@@ -128,6 +141,7 @@ fn execute_transcription(
             .env("PYTHONPATH", project_root.join("src"));
     }
 
+    // Argumentos comuns ao desenvolvimento e à produção.
     command
         .arg(&file_path)
         .arg("--json-events")
@@ -148,10 +162,14 @@ fn execute_transcription(
             format!("Não foi possível iniciar a transcrição: {error}")
         })?;
 
-    let stdout = child.stdout.take()
+    let stdout = child
+        .stdout
+        .take()
         .ok_or("Não foi possível capturar stdout")?;
 
-    let stderr = child.stderr.take()
+    let stderr = child
+        .stderr
+        .take()
         .ok_or("Não foi possível capturar stderr")?;
 
     let stderr_thread = thread::spawn(move || {
@@ -186,7 +204,8 @@ fn execute_transcription(
         }
     }
 
-    let status = child.wait()
+    let status = child
+        .wait()
         .map_err(|error| error.to_string())?;
 
     let stderr_output = stderr_thread
