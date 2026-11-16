@@ -11,8 +11,16 @@ jobs:
     runs-on: windows-latest
 
     steps:
+      # ======================================
+      # 1. CHECKOUT
+      # ======================================
+
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      # ======================================
+      # 2. PYTHON
+      # ======================================
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -26,11 +34,23 @@ jobs:
           python -m pip install -e .
           python -m pip install pyinstaller==6.22.3 pytest
 
+      # ======================================
+      # 3. TESTES PYTHON
+      # ======================================
+
       - name: Run Python tests
         run: python -m pytest
 
+      # ======================================
+      # 4. BUILD PYTHON
+      # ======================================
+
       - name: Build transcription executable
         run: pyinstaller --clean --noconfirm audiencia.spec
+
+      # ======================================
+      # 5. PREPARAR RECURSOS TAURI
+      # ======================================
 
       - name: Prepare Tauri resources
         shell: pwsh
@@ -46,8 +66,17 @@ jobs:
             Remove-Item $Destination -Recurse -Force
           }
 
-          New-Item -ItemType Directory -Path $Destination -Force
+          New-Item -ItemType Directory -Path $Destination -Force | Out-Null
+
           Copy-Item "$Source/*" $Destination -Recurse -Force
+
+          if (!(Test-Path "$Destination/audiencia.exe")) {
+            throw "Falha ao copiar audiencia.exe."
+          }
+
+      # ======================================
+      # 6. NODE.JS
+      # ======================================
 
       - name: Setup Node.js
         uses: actions/setup-node@v5
@@ -60,8 +89,63 @@ jobs:
         working-directory: desktop
         run: npm ci
 
+      # ======================================
+      # 7. VALIDAR VERSÕES
+      # ======================================
+
+      - name: Validate application versions
+        shell: pwsh
+        run: |
+          $Tauri = Get-Content "desktop/src-tauri/tauri.conf.json" -Raw | ConvertFrom-Json
+
+          $Package = Get-Content "desktop/package.json" -Raw | ConvertFrom-Json
+
+          $PackageLock = Get-Content "desktop/package-lock.json" -Raw | ConvertFrom-Json
+
+          $CargoContent = Get-Content "desktop/src-tauri/Cargo.toml" -Raw
+
+          if ($CargoContent -notmatch '(?m)^version\s*=\s*"([^"]+)"') {
+            throw "Não foi possível identificar a versão do Cargo.toml."
+          }
+
+          $CargoVersion = $Matches[1]
+          $PackageLockVersion = $PackageLock.packages[''].version
+
+          $Versions = @(
+            $Tauri.version,
+            $CargoVersion,
+            $Package.version,
+            $PackageLockVersion
+          )
+
+          Write-Host "======================================"
+          Write-Host " VALIDANDO VERSÕES"
+          Write-Host "======================================"
+
+          Write-Host "Tauri: $($Tauri.version)"
+          Write-Host "Cargo: $CargoVersion"
+          Write-Host "Package: $($Package.version)"
+          Write-Host "Package Lock: $PackageLockVersion"
+
+          $UniqueVersions = @($Versions | Select-Object -Unique)
+
+          if ($UniqueVersions.Count -ne 1) {
+            throw "As versões estão divergentes. Build cancelado."
+          }
+
+          Write-Host ""
+          Write-Host "Todas as versões estão sincronizadas: $($Tauri.version)"
+
+      # ======================================
+      # 8. RUST
+      # ======================================
+
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+
+      # ======================================
+      # 9. BUILD E PUBLICAÇÃO
+      # ======================================
 
       - name: Build and publish Tauri release
         uses: tauri-apps/tauri-action@v1
@@ -69,15 +153,20 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
         with:
           projectPath: desktop
+
           tagName: app-v__VERSION__
+
           releaseName: Claude Audiencia v__VERSION__
+
           releaseBody: |
             Nova versão do Claude Audiência para Windows.
-            
+
             Baixe o instalador NSIS para instalar ou atualizar o aplicativo.
+
           releaseDraft: true
           prerelease: false
-          args: --bundles nsis
 
+          args: --bundles nsis

@@ -76,7 +76,7 @@ function Configure-ClaudePath {
         ForEach-Object { $_.Trim().TrimEnd("\") }
 
     if ($CurrentEntries -notcontains $ClaudeDirectory.TrimEnd("\")) {
-        $env:Path += ";$ClaudeDirectory"
+        $env:Path = "$env:Path;$ClaudeDirectory"
     }
 
     # Valida a instalação
