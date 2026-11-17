@@ -135,7 +135,7 @@ jobs:
           $CargoLockContent = [regex]::Replace(
             $CargoLockContent,
             '(?s)(\[\[package\]\]\r?\nname = "desktop"\r?\nversion = ")[^"]+(")',
-            ('$1' + $ReleaseVersion + '$2'),
+            ('${1}' + $ReleaseVersion + '${2}'),
             1
           )
           Set-Content $CargoLockPath $CargoLockContent -NoNewline -Encoding utf8
