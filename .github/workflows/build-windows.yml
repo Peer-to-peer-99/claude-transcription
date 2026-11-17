@@ -100,7 +100,7 @@ jobs:
 
           $Package = Get-Content "desktop/package.json" -Raw | ConvertFrom-Json
 
-          $PackageLock = Get-Content "desktop/package-lock.json" -Raw | ConvertFrom-Json
+          $PackageLock = Get-Content "desktop/package-lock.json" -Raw | ConvertFrom-Json -AsHashtable
 
           $CargoContent = Get-Content "desktop/src-tauri/Cargo.toml" -Raw
 
