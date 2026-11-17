@@ -7,14 +7,7 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tauri::{
-    AppHandle,
-    Emitter,
-    Manager,
-};
-
-#[cfg(not(debug_assertions))]
-use tauri::path::BaseDirectory;
+use tauri::{AppHandle, Emitter, Manager, path::BaseDirectory};
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -42,6 +35,82 @@ fn get_file_info(file_path: String) -> Result<FileInfo, String> {
         name,
         size: metadata.len(),
     })
+}
+
+#[tauri::command]
+fn configure_claude_desktop(app: AppHandle) -> Result<String, String> {
+    if !cfg!(target_os = "windows") {
+        return Err(
+            "A configuração automática do Claude Desktop está disponível no Windows.".to_string(),
+        );
+    }
+
+    let executable = app
+        .path()
+        .resolve("audiencia/audiencia.exe", BaseDirectory::Resource)
+        .map_err(|error| {
+            format!("Não foi possível localizar o mecanismo de transcrição: {error}")
+        })?;
+
+    if !executable.is_file() {
+        return Err(format!(
+            "Executável de transcrição não encontrado: {}",
+            executable.display()
+        ));
+    }
+
+    let app_data = std::env::var_os("APPDATA")
+        .map(PathBuf::from)
+        .ok_or("A variável APPDATA não está definida no Windows.")?;
+    let config_dir = app_data.join("Claude");
+    let config_path = config_dir.join("claude_desktop_config.json");
+    let application_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| error.to_string())?;
+
+    std::fs::create_dir_all(&config_dir)
+        .map_err(|error| format!("Não foi possível criar a pasta de configuração: {error}"))?;
+
+    let mut config = if config_path.exists() {
+        let contents = std::fs::read_to_string(&config_path).map_err(|error| {
+            format!("Não foi possível ler a configuração existente do Claude Desktop: {error}")
+        })?;
+        serde_json::from_str::<Value>(&contents).map_err(|error| {
+            format!("A configuração do Claude Desktop contém JSON inválido: {error}")
+        })?
+    } else {
+        serde_json::json!({})
+    };
+
+    let root = config
+        .as_object_mut()
+        .ok_or("A configuração do Claude Desktop precisa ser um objeto JSON.")?;
+    let servers = root
+        .entry("mcpServers")
+        .or_insert_with(|| serde_json::json!({}))
+        .as_object_mut()
+        .ok_or("A propriedade mcpServers existente não é um objeto JSON.")?;
+
+    servers.insert(
+        "claude-audiencia".to_string(),
+        serde_json::json!({
+            "command": executable.to_string_lossy(),
+            "args": ["--mcp-server"],
+            "env": {
+                "CLAUDE_AUDIENCIA_TRANSCRIPTIONS_DIR": application_data_dir.join("transcriptions"),
+                "CLAUDE_AUDIENCIA_MODEL_DIR": application_data_dir.join("models")
+            }
+        }),
+    );
+
+    let serialized = serde_json::to_vec_pretty(&config)
+        .map_err(|error| format!("Não foi possível serializar a configuração: {error}"))?;
+    std::fs::write(&config_path, serialized).map_err(|error| {
+        format!("Não foi possível salvar a configuração do Claude Desktop: {error}")
+    })?;
+
+    Ok(config_path.display().to_string())
 }
 
 #[tauri::command]
@@ -234,7 +303,8 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .invoke_handler(tauri::generate_handler![
             get_file_info,
-            start_transcription
+            start_transcription,
+            configure_claude_desktop
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -33,9 +33,12 @@ const selectedFile = ref<SelectedFile | null>(null);
 
 const isTranscribing = ref(false);
 const transcript = ref("");
+const transcriptionPath = ref("");
 const progress = ref(0);
 const statusText = ref("Aguardando");
 const errorMessage = ref("");
+const mcpSetupMessage = ref("");
+const isConfiguringMcp = ref(false);
 
 let unlistenTranscription: UnlistenFn | null = null;
 
@@ -146,6 +149,23 @@ async function installUpdate() {
   }
 }
 
+async function configureClaudeDesktop() {
+  if (isConfiguringMcp.value) return;
+
+  isConfiguringMcp.value = true;
+  mcpSetupMessage.value = "";
+
+  try {
+    const configPath = await invoke<string>("configure_claude_desktop");
+    mcpSetupMessage.value =
+      `Claude Desktop configurado. Feche e abra o aplicativo novamente. O vídeo é processado localmente; o texto retornado pode ser enviado à Anthropic. Configuração: ${configPath}`;
+  } catch (error) {
+    mcpSetupMessage.value = `Não foi possível configurar o Claude Desktop: ${String(error)}`;
+  } finally {
+    isConfiguringMcp.value = false;
+  }
+}
+
 // Abre o seletor nativo de arquivos do sistema.
 async function openFileSelector() {
   if (isTranscribing.value) return;
@@ -186,6 +206,7 @@ async function openFileSelector() {
     };
 
     transcript.value = "";
+    transcriptionPath.value = "";
     progress.value = 0;
     errorMessage.value = "";
     statusText.value = "Aguardando";
@@ -200,6 +221,7 @@ function removeFile() {
 
   selectedFile.value = null;
   transcript.value = "";
+  transcriptionPath.value = "";
   progress.value = 0;
   errorMessage.value = "";
   statusText.value = "Aguardando";
@@ -230,6 +252,7 @@ function handleTranscriptionEvent(event: TranscriptionEvent) {
     case "transcription_completed":
       progress.value = 100;
       statusText.value = "Concluída";
+      transcriptionPath.value = event.file ?? "";
       break;
 
     case "transcription_error":
@@ -244,6 +267,7 @@ async function startTranscription() {
 
   isTranscribing.value = true;
   transcript.value = "";
+  transcriptionPath.value = "";
   progress.value = 0;
   errorMessage.value = "";
   statusText.value = "Preparando transcrição";
@@ -353,6 +377,15 @@ onUnmounted(() => {
           <button
             class="update-check-button"
             type="button"
+            :disabled="isConfiguringMcp"
+            @click="configureClaudeDesktop"
+          >
+            {{ isConfiguringMcp ? "Configurando..." : "Conectar Claude Desktop" }}
+          </button>
+
+          <button
+            class="update-check-button"
+            type="button"
             :disabled="isCheckingUpdate || isDownloadingUpdate"
             @click="checkForUpdates"
           >
@@ -362,6 +395,10 @@ onUnmounted(() => {
       </header>
 
       <section class="workspace">
+        <p v-if="mcpSetupMessage" class="integration-message">
+          {{ mcpSetupMessage }}
+        </p>
+
         <div class="page-heading">
           <div>
             <span class="eyebrow">TRANSCRIÇÃO DE AUDIÊNCIAS</span>
@@ -569,6 +606,10 @@ onUnmounted(() => {
           <div v-if="errorMessage" class="error-message">
             {{ errorMessage }}
           </div>
+
+          <p v-if="transcriptionPath" class="transcription-path">
+            Arquivo salvo em: {{ transcriptionPath }}
+          </p>
 
           <div class="transcript-footer">
             <span>Somente leitura · Texto selecionável</span>
@@ -1075,6 +1116,25 @@ onUnmounted(() => {
   color: #e77979;
   font-size: 11px;
   line-height: 1.5;
+}
+
+.integration-message,
+.transcription-path {
+  overflow-wrap: anywhere;
+  color: #aeb1bb;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.integration-message {
+  padding: 12px;
+  border: 1px solid #3b3f49;
+  border-radius: 5px;
+  background: #17191f;
+}
+
+.transcription-path {
+  margin-top: 15px;
 }
 
 .transcript-footer {

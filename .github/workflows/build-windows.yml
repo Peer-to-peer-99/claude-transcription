@@ -1,10 +1,17 @@
 name: Build Claude Audiencia - Windows
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
   contents: write
+
+concurrency:
+  group: windows-release-main
+  cancel-in-progress: false
 
 jobs:
   build-windows:
@@ -17,6 +24,8 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       # ======================================
       # 2. PYTHON
@@ -75,7 +84,64 @@ jobs:
           }
 
       # ======================================
-      # 6. NODE.JS
+      # 6. DEFINIR VERSÃO DA RELEASE
+      # ======================================
+
+      - name: Set next release version
+        shell: pwsh
+        run: |
+          $ConfigPath = "desktop/src-tauri/tauri.conf.json"
+          $PackagePath = "desktop/package.json"
+          $PackageLockPath = "desktop/package-lock.json"
+          $Config = Get-Content $ConfigPath -Raw | ConvertFrom-Json
+          $CurrentVersion = [version]$Config.version
+          $LatestTag = git tag --list "app-v*" --sort=-version:refname |
+            Select-Object -First 1
+
+          $BaseVersion = $CurrentVersion
+          if ($LatestTag -match '^app-v(\d+\.\d+\.\d+)$') {
+            $TaggedVersion = [version]$Matches[1]
+            if ($TaggedVersion -gt $BaseVersion) {
+              $BaseVersion = $TaggedVersion
+            }
+          }
+
+          $ReleaseVersion = "$($BaseVersion.Major).$($BaseVersion.Minor).$($BaseVersion.Build + 1)"
+          Write-Host "Próxima versão: $ReleaseVersion"
+
+          $Config.version = $ReleaseVersion
+          $Config | ConvertTo-Json -Depth 100 |
+            Set-Content $ConfigPath -Encoding utf8
+
+          $Package = Get-Content $PackagePath -Raw | ConvertFrom-Json
+          $Package.version = $ReleaseVersion
+          $Package | ConvertTo-Json -Depth 100 |
+            Set-Content $PackagePath -Encoding utf8
+
+          $PackageLock = Get-Content $PackageLockPath -Raw |
+            ConvertFrom-Json -AsHashtable
+          $PackageLock.version = $ReleaseVersion
+          $PackageLock.packages[""].version = $ReleaseVersion
+          $PackageLock | ConvertTo-Json -Depth 100 |
+            Set-Content $PackageLockPath -Encoding utf8
+
+          $CargoPath = "desktop/src-tauri/Cargo.toml"
+          $CargoContent = Get-Content $CargoPath -Raw
+          $CargoContent = $CargoContent -replace '(?m)^version\s*=\s*"[^"]+"', "version = `"$ReleaseVersion`""
+          Set-Content $CargoPath $CargoContent -NoNewline -Encoding utf8
+
+          $CargoLockPath = "desktop/src-tauri/Cargo.lock"
+          $CargoLockContent = Get-Content $CargoLockPath -Raw
+          $CargoLockContent = [regex]::Replace(
+            $CargoLockContent,
+            '(?s)(\[\[package\]\]\r?\nname = "desktop"\r?\nversion = ")[^"]+(")',
+            ('$1' + $ReleaseVersion + '$2'),
+            1
+          )
+          Set-Content $CargoLockPath $CargoLockContent -NoNewline -Encoding utf8
+
+      # ======================================
+      # 7. NODE.JS
       # ======================================
 
       - name: Setup Node.js
@@ -90,7 +156,7 @@ jobs:
         run: npm ci
 
       # ======================================
-      # 7. VALIDAR VERSÕES
+      # 8. VALIDAR VERSÕES
       # ======================================
 
       - name: Validate application versions
@@ -137,15 +203,24 @@ jobs:
           Write-Host "Todas as versões estão sincronizadas: $($Tauri.version)"
 
       # ======================================
-      # 8. RUST
+      # 9. RUST
       # ======================================
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
       # ======================================
-      # 9. BUILD E PUBLICAÇÃO
+      # 10. BUILD E PUBLICAÇÃO
       # ======================================
+
+      - name: Validate updater signing key
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)) {
+            throw "Configure o secret TAURI_SIGNING_PRIVATE_KEY para assinar as atualizações."
+          }
 
       - name: Build and publish Tauri release
         uses: tauri-apps/tauri-action@v1
@@ -166,7 +241,7 @@ jobs:
 
             Baixe o instalador NSIS para instalar ou atualizar o aplicativo.
 
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
 
           args: --bundles nsis

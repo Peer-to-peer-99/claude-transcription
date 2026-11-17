@@ -53,7 +53,14 @@ def main() -> None:
 
     parser.add_argument(
         "file",
+        nargs="?",
         help="Caminho do arquivo de áudio ou vídeo.",
+    )
+
+    parser.add_argument(
+        "--mcp-server",
+        action="store_true",
+        help="Inicia o servidor MCP local para o Claude Desktop.",
     )
 
     parser.add_argument(
@@ -70,6 +77,15 @@ def main() -> None:
     )
 
     args = parser.parse_args()
+
+    if args.mcp_server:
+        from transcriber.mcp_server import main as run_mcp_server
+
+        run_mcp_server()
+        return
+
+    if not args.file:
+        parser.error("informe o caminho de um arquivo ou use --mcp-server")
 
     try:
         service = TranscriptionService(

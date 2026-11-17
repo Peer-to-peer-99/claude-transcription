@@ -9,7 +9,8 @@ description = "Transcrição local de áudio e vídeo com Faster-Whisper."
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "faster-whisper==1.2.1",
-    "av==18.0.0"
+    "av==18.0.0",
+    "mcp>=1.12,<2"
 ]
 
 [project.optional-dependencies]
